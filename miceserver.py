@@ -386,38 +386,40 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "lobby_id": lobby_id
                             })
                 
-                elif action == "update_position":
-                    lobby_id = message.get("lobby_id")
-                    username = message.get("username")
-                    x = message.get("x", 0.0)
-                    y = message.get("y", 0.0)
-                    z = message.get("z", 0.0)
-                    
-                    lobby = None
-                    for c, l in lobbies.items():
-                        if l["lobby_id"] == lobby_id:
-                            lobby = l
-                            break
-                    
-                    if not lobby:
-                        await websocket.send_json({"error": "Lobby not found"})
-                        continue
-                    
-                    if username not in lobby["players"]:
-                        await websocket.send_json({"error": "Player not in lobby"})
-                        continue
-                    
-                    lobby["positions"][username] = {"x": x, "y": y, "z": z}
-                    print(f"Updated position for {username} in lobby {lobby_id}: x={x}, y={y}, z={z}")
-                    
-                    await notify_clients(lobby_id, {
-                        "action": "update_position",
-                        "lobby_id": lobby_id,
-                        "username": username,
-                        "x": x,
-                        "y": y,
-                        "z": z
-                    })
+                        elif action == "update_position":
+                            lobby_id = message.get("lobby_id")
+                            username = message.get("username")
+                            x = message.get("x", 0.0)
+                            y = message.get("y", 0.0)
+                            z = message.get("z", 0.0)
+                            rotation_y = message.get("rotation_y", 0.0)  
+    
+                            lobby = None
+                            for c, l in lobbies.items():
+                                if l["lobby_id"] == lobby_id:
+                                    lobby = l
+                                    break
+    
+                            if not lobby:
+                                await websocket.send_json({"error": "Lobby not found"})
+                                continue
+    
+                            if username not in lobby["players"]:
+                                await websocket.send_json({"error": "Player not in lobby"})
+                                continue
+    
+                            lobby["positions"][username] = {"x": x, "y": y, "z": z, "rotation_y": rotation_y}
+                            print(f"Updated position for {username} in lobby {lobby_id}: x={x}, y={y}, z={z}, rotation_y={rotation_y}")
+    
+                            await notify_clients(lobby_id, {
+                                "action": "update_position",
+                                "lobby_id": lobby_id,
+                                "username": username,
+                                "x": x,
+                                "y": y,
+                                "z": z,
+                                "rotation_y": rotation_y 
+                            })
                 
                 elif action == "collect_item":
                     lobby_id = message.get("lobby_id")
