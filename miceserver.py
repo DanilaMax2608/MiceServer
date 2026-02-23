@@ -340,14 +340,17 @@ async def websocket_endpoint(websocket: WebSocket):
                                     except Exception as e:
                                         print(f"Error notifying client in lobby {lobby_id}: {e}")
                             del clients[lobby_id]
-                        del lobbies[creator]
+                        if creator in lobbies:
+                            del lobbies[creator]
                         print(f"Lobby {lobby_id} deleted by creator {username}")
                         await websocket.send_json({"message": "Lobby closed"})
                     else:
                         if username in lobby["players"]:
                             lobby["players"].remove(username)
-                            del lobby["scores"][username]
-                            del lobby["positions"][username]
+                            if username in lobby["scores"]:
+                                del lobby["scores"][username]
+                            if username in lobby["positions"]:
+                                del lobby["positions"][username]
                             if username in lobby["rotations"]:
                                 del lobby["rotations"][username] 
                             if username in lobby["ready_players"]:
@@ -355,13 +358,16 @@ async def websocket_endpoint(websocket: WebSocket):
                             if lobby_id in clients:
                                 if websocket in clients[lobby_id]:
                                     clients[lobby_id].remove(websocket)
+                            
                             await notify_clients(lobby_id, {
                                 "lobby_id": lobby_id,
                                 "players": lobby["players"],
                                 "status": lobby["status"]
                             })
-                            print(f"{username} left lobby {lobby_id}")
+                            
                             await websocket.send_json({"message": "Left lobby"})
+                            
+                            print(f"{username} left lobby {lobby_id}. Remaining players: {lobby['players']}")
                 
                 elif action == "ready":
                     username = message.get("username")
@@ -685,30 +691,61 @@ async def websocket_endpoint(websocket: WebSocket):
 
 async def handle_disconnect(websocket: WebSocket):
     client_ip = websocket.client.host
+    print(f"Handling disconnect for client: {client_ip}")
+    
     for lobby_id, client_list in list(clients.items()):
         if websocket in client_list:
             client_list.remove(websocket)
-            for creator, lobby in list(lobbies.items()):
-                if lobby["lobby_id"] == lobby_id:
-                    if not client_list:
-                        del lobbies[creator]
+            
+            lobby = None
+            creator = None
+            for c, l in list(lobbies.items()):
+                if l["lobby_id"] == lobby_id:
+                    lobby = l
+                    creator = c
+                    break
+            
+            if lobby:
+                disconnected_username = None
+                for player in list(lobby["players"]):
+                    if player != lobby["creator"]:
+                        disconnected_username = player
+                        break
+                
+                if disconnected_username:
+                    if disconnected_username in lobby["players"]:
+                        lobby["players"].remove(disconnected_username)
+                    if disconnected_username in lobby["scores"]:
+                        del lobby["scores"][disconnected_username]
+                    if disconnected_username in lobby["positions"]:
+                        del lobby["positions"][disconnected_username]
+                    if disconnected_username in lobby["rotations"]:
+                        del lobby["rotations"][disconnected_username]
+                    if disconnected_username in lobby["ready_players"]:
+                        lobby["ready_players"].remove(disconnected_username)
+                    
+                    print(f"Removed {disconnected_username} from lobby {lobby_id} due to disconnect")
+                    
+                    if client_list:  
+                        await notify_clients(lobby_id, {
+                            "lobby_id": lobby_id,
+                            "players": lobby["players"],
+                            "status": lobby["status"]
+                        })
+                    else: 
+                        if creator in lobbies:
+                            del lobbies[creator]
+                        if lobby_id in clients:
+                            del clients[lobby_id]
                         print(f"Lobby {lobby_id} deleted due to no clients")
-                    else:
-                        for username in list(lobby["players"]):
-                            if username != lobby["creator"]:
-                                lobby["players"].remove(username)
-                                del lobby["scores"][username]
-                                del lobby["positions"][username]
-                                if username in lobby["rotations"]:
-                                    del lobby["rotations"][username]
-                                if username in lobby["ready_players"]:
-                                    lobby["ready_players"].remove(username)
-                                await notify_clients(lobby_id, {
-                                    "lobby_id": lobby_id,
-                                    "players": lobby["players"],
-                                    "status": lobby["status"]
-                                })
-                                print(f"Removed {username} from lobby {lobby_id} due to disconnect")
+                else:
+                    if not client_list:
+                        if creator in lobbies:
+                            del lobbies[creator]
+                        if lobby_id in clients:
+                            del clients[lobby_id]
+                        print(f"Lobby {lobby_id} deleted due to no clients")
+            
             print(f"WebSocket client disconnected: {client_ip}")
             break
 
