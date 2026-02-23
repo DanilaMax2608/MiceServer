@@ -5,6 +5,7 @@ from typing import List, Dict, Optional
 import uuid
 import json
 import random
+import time
 
 app = FastAPI()
 
@@ -58,7 +59,8 @@ async def create_lobby(request: LobbyCreateRequest):
         "bonus_multipliers": {  
             "slow_multiplier": 0.5,
             "speed_up_multiplier": 2.0
-        }
+        },
+        "created_at": time.time()  
     }
     clients[lobby_id] = []
     
@@ -137,6 +139,8 @@ async def start_game(request: StartGameRequest):
     lobby["status"] = "started"
     lobby["seed"] = seed
     
+    print(f"Game started in lobby {lobby_id} with seed {seed} (creator: {username})")
+    
     await notify_clients(lobby_id, {
         "lobby_id": lobby_id,
         "players": lobby["players"],
@@ -145,8 +149,7 @@ async def start_game(request: StartGameRequest):
         "items": lobby["items"]
     })
     
-    print(f"Game started in lobby {lobby_id} with seed {seed}, generated {len(lobby['items'])} items")
-    return {"message": "Game has started"}
+    return {"message": "Game has started", "seed": seed}
 
 @app.websocket("/ws/lobby")
 async def websocket_endpoint(websocket: WebSocket):
@@ -194,7 +197,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         "bonus_multipliers": {
                             "slow_multiplier": 0.5,
                             "speed_up_multiplier": 2.0
-                        }
+                        },
+                        "created_at": time.time()
                     }
                     clients[lobby_id] = [websocket]
                     
@@ -277,6 +281,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     lobby["status"] = "started"
                     lobby["seed"] = seed
                     
+                    print(f"Game started in lobby {lobby_id} with seed {seed} (creator: {username})")
+                    
                     await notify_clients(lobby_id, {
                         "lobby_id": str(lobby_id),
                         "players": lobby["players"],
@@ -284,7 +290,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         "seed": seed,
                         "items": lobby["items"]
                     })
-                    print(f"Game started in lobby {lobby_id} with seed {seed}")
                 
                 elif action == "set_bonus_data": 
                     username = message.get("username")
