@@ -516,14 +516,16 @@ async def websocket_endpoint(websocket: WebSocket):
                         continue
     
                     lobby["items"][item_id]["collected"] = True
-                    print(f"Bonus item {item_id} collected by {username} in lobby {lobby_id}, bonus_type: {bonus_type}")
+                    lobby["scores"][username] = lobby["scores"].get(username, 0) + 1 
+                    print(f"Bonus item {item_id} collected by {username} in lobby {lobby_id}, bonus_type: {bonus_type}, new score: {lobby['scores'][username]}")
     
                     await notify_clients(lobby_id, {
                         "action": "item_collected",
                         "lobby_id": lobby_id,
                         "item_id": item_id,
                         "username": username,
-                        "bonus_type": bonus_type
+                        "bonus_type": bonus_type,
+                        "scores": lobby["scores"]  
                     })
     
                     bonus_durations = lobby.get("bonus_durations", {})
