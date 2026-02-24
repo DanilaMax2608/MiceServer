@@ -695,9 +695,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         if trap_id:
                             lobby["mouse_traps"][trap_id] = {
                                 "triggered": False,
-                                "position": trap.get("position", {"x": 0, "y": 0, "z": 0}),
-                                "min_loss": trap.get("min_loss", 10),
-                                "max_loss": trap.get("max_loss", 25)
+                                "position": trap.get("position", {"x": 0, "y": 0, "z": 0})
                             }
        
                     await notify_clients(lobby_id, {
