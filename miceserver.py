@@ -49,6 +49,7 @@ async def create_lobby(request: LobbyCreateRequest):
         "positions": {username: {"x": 0.0, "y": 0.0, "z": 0.0}},
         "rotations": {username: {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}},  
         "items": {},
+        "mouse_traps": {}, 
         "ready_players": [],
         "messages": [],
         "bonus_durations": { 
@@ -146,7 +147,8 @@ async def start_game(request: StartGameRequest):
         "players": lobby["players"],
         "status": "started",
         "seed": seed,
-        "items": lobby["items"]
+        "items": lobby["items"],
+        "mouse_traps": lobby["mouse_traps"] 
     })
     
     return {"message": "Game has started", "seed": seed}
@@ -187,6 +189,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "positions": {username: {"x": 0.0, "y": 0.0, "z": 0.0}},
                         "rotations": {username: {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}},  
                         "items": {},
+                        "mouse_traps": {},  
                         "ready_players": [],
                         "messages": [],
                         "bonus_durations": {
@@ -288,7 +291,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         "players": lobby["players"],
                         "status": "started",
                         "seed": seed,
-                        "items": lobby["items"]
+                        "items": lobby["items"],
+                        "mouse_traps": lobby["mouse_traps"] 
                     })
                 
                 elif action == "set_bonus_data": 
@@ -593,6 +597,51 @@ async def websocket_endpoint(websocket: WebSocket):
                                     "speed_multiplier": speed_multiplier
                                 })
                 
+                elif action == "collect_trap":
+                    lobby_id = message.get("lobby_id")
+                    username = message.get("username")
+                    trap_id = message.get("trap_id")
+                    loss_percentage = message.get("loss_percentage", 0)
+                    
+                    lobby = None
+                    for c, l in lobbies.items():
+                        if l["lobby_id"] == lobby_id:
+                            lobby = l
+                            break
+                    
+                    if not lobby:
+                        await websocket.send_json({"error": "Lobby not found"})
+                        continue
+                    
+                    if username not in lobby["players"]:
+                        await websocket.send_json({"error": "Player not in lobby"})
+                        continue
+                    
+                    if trap_id not in lobby["mouse_traps"]:
+                        await websocket.send_json({"error": "Mouse trap not found"})
+                        continue
+                    
+                    if lobby["mouse_traps"][trap_id]["triggered"]:
+                        await websocket.send_json({"error": "Mouse trap already triggered"})
+                        continue
+                    
+                    lobby["mouse_traps"][trap_id]["triggered"] = True
+                    
+                    current_score = lobby["scores"].get(username, 0)
+                    items_to_remove = int(current_score * loss_percentage / 100)
+                    lobby["scores"][username] = current_score - items_to_remove
+                    
+                    print(f"Mouse trap {trap_id} triggered by {username} in lobby {lobby_id}, loss: {loss_percentage}% ({items_to_remove} items), new score: {lobby['scores'][username]}")
+                    
+                    await notify_clients(lobby_id, {
+                        "action": "trap_triggered",
+                        "lobby_id": lobby_id,
+                        "trap_id": trap_id,
+                        "username": username,
+                        "loss_percentage": loss_percentage,
+                        "scores": lobby["scores"]
+                    })
+                
                 elif action == "register_items":
                     lobby_id = message.get("lobby_id")
                     items = message.get("items", [])
@@ -625,6 +674,39 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
        
                     print(f"Registered {len(lobby['items'])} items in lobby {lobby_id}")
+                
+                elif action == "register_mouse_traps":
+                    lobby_id = message.get("lobby_id")
+                    mouse_traps = message.get("mouse_traps", [])
+       
+                    lobby = None
+                    for c, l in lobbies.items():
+                        if l["lobby_id"] == lobby_id:
+                            lobby = l
+                            break
+       
+                    if not lobby:
+                        await websocket.send_json({"error": "Lobby not found"})
+                        continue
+       
+                    lobby["mouse_traps"] = {}
+                    for trap in mouse_traps:
+                        trap_id = trap.get("trap_id")
+                        if trap_id:
+                            lobby["mouse_traps"][trap_id] = {
+                                "triggered": False,
+                                "position": trap.get("position", {"x": 0, "y": 0, "z": 0}),
+                                "min_loss": trap.get("min_loss", 10),
+                                "max_loss": trap.get("max_loss", 25)
+                            }
+       
+                    await notify_clients(lobby_id, {
+                        "action": "mouse_traps_registered",
+                        "lobby_id": lobby_id,
+                        "mouse_traps_count": len(lobby["mouse_traps"])
+                    })
+       
+                    print(f"Registered {len(lobby['mouse_traps'])} mouse traps in lobby {lobby_id}")
                 
                 elif action == "send_message":
                     lobby_id = message.get("lobby_id")
