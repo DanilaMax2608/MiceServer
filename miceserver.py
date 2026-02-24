@@ -49,7 +49,9 @@ async def create_lobby(request: LobbyCreateRequest):
         "positions": {username: {"x": 0.0, "y": 0.0, "z": 0.0}},
         "rotations": {username: {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}},  
         "items": {},
-        "mouse_traps": {}, 
+        "items_rotations": {},  
+        "mouse_traps": {},
+        "mouse_traps_rotations": {}, 
         "ready_players": [],
         "messages": [],
         "bonus_durations": { 
@@ -148,7 +150,9 @@ async def start_game(request: StartGameRequest):
         "status": "started",
         "seed": seed,
         "items": lobby["items"],
-        "mouse_traps": lobby["mouse_traps"] 
+        "items_rotations": lobby["items_rotations"], 
+        "mouse_traps": lobby["mouse_traps"],
+        "mouse_traps_rotations": lobby["mouse_traps_rotations"] 
     })
     
     return {"message": "Game has started", "seed": seed}
@@ -189,7 +193,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         "positions": {username: {"x": 0.0, "y": 0.0, "z": 0.0}},
                         "rotations": {username: {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}},  
                         "items": {},
-                        "mouse_traps": {},  
+                        "items_rotations": {},  
+                        "mouse_traps": {},
+                        "mouse_traps_rotations": {},  
                         "ready_players": [],
                         "messages": [],
                         "bonus_durations": {
@@ -292,7 +298,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         "status": "started",
                         "seed": seed,
                         "items": lobby["items"],
-                        "mouse_traps": lobby["mouse_traps"] 
+                        "items_rotations": lobby["items_rotations"], 
+                        "mouse_traps": lobby["mouse_traps"],
+                        "mouse_traps_rotations": lobby["mouse_traps_rotations"] 
                     })
                 
                 elif action == "set_bonus_data": 
@@ -657,6 +665,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         continue
        
                     lobby["items"] = {}
+                    lobby["items_rotations"] = {} 
                     for item in items:
                         item_id = item.get("item_id")
                         if item_id:
@@ -666,6 +675,11 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "is_bonus": item.get("is_bonus", False),
                                 "bonus_type": item.get("bonus_type", "")
                             }
+                            rotation = item.get("rotation")
+                            if rotation:
+                                lobby["items_rotations"][item_id] = rotation
+                            else:
+                                lobby["items_rotations"][item_id] = {"x": 0, "y": 0, "z": 0, "w": 1}  
        
                     await notify_clients(lobby_id, {
                         "action": "items_registered",
@@ -673,7 +687,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "items_count": len(lobby["items"])
                     })
        
-                    print(f"Registered {len(lobby['items'])} items in lobby {lobby_id}")
+                    print(f"Registered {len(lobby['items'])} items with rotations in lobby {lobby_id}")
                 
                 elif action == "register_mouse_traps":
                     lobby_id = message.get("lobby_id")
@@ -690,6 +704,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         continue
        
                     lobby["mouse_traps"] = {}
+                    lobby["mouse_traps_rotations"] = {} 
                     for trap in mouse_traps:
                         trap_id = trap.get("trap_id")
                         if trap_id:
@@ -697,6 +712,11 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "triggered": False,
                                 "position": trap.get("position", {"x": 0, "y": 0, "z": 0})
                             }
+                            rotation = trap.get("rotation")
+                            if rotation:
+                                lobby["mouse_traps_rotations"][trap_id] = rotation
+                            else:
+                                lobby["mouse_traps_rotations"][trap_id] = {"x": 0, "y": 0, "z": 0, "w": 1} 
        
                     await notify_clients(lobby_id, {
                         "action": "mouse_traps_registered",
@@ -704,7 +724,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "mouse_traps_count": len(lobby["mouse_traps"])
                     })
        
-                    print(f"Registered {len(lobby['mouse_traps'])} mouse traps in lobby {lobby_id}")
+                    print(f"Registered {len(lobby['mouse_traps'])} mouse traps with rotations in lobby {lobby_id}")
                 
                 elif action == "send_message":
                     lobby_id = message.get("lobby_id")
