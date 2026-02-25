@@ -57,7 +57,8 @@ async def create_lobby(request: LobbyCreateRequest):
         "bonus_durations": { 
             "disable_control_others": 5.0,
             "slow_others": 5.0,
-            "speed_up_others": 5.0
+            "speed_up_others": 5.0,
+            "invert_control_others": 5.0
         },
         "bonus_multipliers": {  
             "slow_multiplier": 0.5,
@@ -201,7 +202,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         "bonus_durations": {
                             "disable_control_others": 5.0,
                             "slow_others": 5.0,
-                            "speed_up_others": 5.0
+                            "speed_up_others": 5.0,
+                            "invert_control_others": 5.0  
                         },
                         "bonus_multipliers": {
                             "slow_multiplier": 0.5,
@@ -603,6 +605,21 @@ async def websocket_endpoint(websocket: WebSocket):
                                     "target_username": player,
                                     "duration": duration,
                                     "speed_multiplier": speed_multiplier
+                                })
+                    
+                    elif bonus_type == "invert_control_others":
+                        duration = bonus_durations.get("invert_control_others")
+                        if duration is None:
+                            duration = 5.0
+                            print(f"Warning: invert_control_others duration not found, using default: {duration}")
+                        
+                        for player in lobby["players"]:
+                            if player != username:
+                                await notify_clients(lobby_id, {
+                                    "action": "apply_effect",
+                                    "effect_type": "invert_control",
+                                    "target_username": player,
+                                    "duration": duration
                                 })
                 
                 elif action == "collect_trap":
