@@ -70,7 +70,7 @@ async def create_lobby(request: LobbyCreateRequest):
         "timer_start_time": 0,  
         "timer_is_running": False,  
         "timer_task": None,  
-        "timer_sync_interval": 5.0  
+        "timer_sync_interval": 1.0  
     }
     clients[lobby_id] = []
     
@@ -220,7 +220,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "timer_start_time": 0,
                         "timer_is_running": False,
                         "timer_task": None,
-                        "timer_sync_interval": 5.0
+                        "timer_sync_interval": 1.0  
                     }
                     clients[lobby_id] = [websocket]
                     
@@ -880,7 +880,7 @@ async def timer_sync_task(lobby_id: str):
     if not lobby:
         return
     
-    sync_interval = lobby.get("timer_sync_interval", 5.0)
+    sync_interval = lobby.get("timer_sync_interval", 1.0)  
     
     try:
         while lobby["timer_is_running"]:
