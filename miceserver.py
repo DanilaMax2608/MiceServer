@@ -6,6 +6,7 @@ import uuid
 import json
 import random
 import time
+import asyncio
 
 app = FastAPI()
 
@@ -64,7 +65,12 @@ async def create_lobby(request: LobbyCreateRequest):
             "slow_multiplier": 0.5,
             "speed_up_multiplier": 2.0
         },
-        "created_at": time.time()  
+        "created_at": time.time(),
+        "timer_duration": 0,  
+        "timer_start_time": 0,  
+        "timer_is_running": False,  
+        "timer_task": None,  
+        "timer_sync_interval": 5.0  
     }
     clients[lobby_id] = []
     
@@ -209,7 +215,12 @@ async def websocket_endpoint(websocket: WebSocket):
                             "slow_multiplier": 0.5,
                             "speed_up_multiplier": 2.0
                         },
-                        "created_at": time.time()
+                        "created_at": time.time(),
+                        "timer_duration": 0,
+                        "timer_start_time": 0,
+                        "timer_is_running": False,
+                        "timer_task": None,
+                        "timer_sync_interval": 5.0
                     }
                     clients[lobby_id] = [websocket]
                     
@@ -351,6 +362,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         continue
                     
                     if username == lobby["creator"]:
+                        if lobby["timer_task"] is not None:
+                            lobby["timer_task"].cancel()
+                            lobby["timer_task"] = None
+                        
                         if lobby_id in clients:
                             for client in clients[lobby_id]:
                                 if client != websocket:
@@ -793,6 +808,28 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                     print(f"Sent {len(available_lobbies)} available lobbies to client {client_ip}")
                 
+                elif action == "start_server_timer":
+                    lobby_id = message.get("lobby_id")
+                    username = message.get("username")
+                    duration = message.get("duration", 0)
+                    
+                    lobby = None
+                    for c, l in lobbies.items():
+                        if l["lobby_id"] == lobby_id:
+                            lobby = l
+                            break
+                    
+                    if not lobby:
+                        await websocket.send_json({"error": "Lobby not found"})
+                        continue
+                    
+                    if username != lobby["creator"]:
+                        await websocket.send_json({"error": "Only the creator can start the timer"})
+                        continue
+                    
+                    await start_server_timer(lobby_id, duration)
+                    print(f"Server timer started in lobby {lobby_id} with duration {duration} seconds")
+                
                 elif action == "ping":
                     username = message.get("username", f"Unknown_{client_ip}")
                     await websocket.send_json({"action": "pong"})
@@ -805,6 +842,95 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         await handle_disconnect(websocket)
 
+async def start_server_timer(lobby_id: str, duration: float):
+    lobby = None
+    for c, l in lobbies.items():
+        if l["lobby_id"] == lobby_id:
+            lobby = l
+            break
+    
+    if not lobby:
+        print(f"Lobby {lobby_id} not found for starting timer")
+        return
+    
+    if lobby["timer_task"] is not None:
+        lobby["timer_task"].cancel()
+    
+    lobby["timer_duration"] = duration
+    lobby["timer_start_time"] = time.time()
+    lobby["timer_is_running"] = True
+    
+    lobby["timer_task"] = asyncio.create_task(timer_sync_task(lobby_id))
+    
+    await notify_clients(lobby_id, {
+        "action": "timer_started",
+        "duration": duration,
+        "start_time": lobby["timer_start_time"]
+    })
+    
+    print(f"Timer started for lobby {lobby_id} with duration {duration}")
+
+async def timer_sync_task(lobby_id: str):
+    lobby = None
+    for c, l in lobbies.items():
+        if l["lobby_id"] == lobby_id:
+            lobby = l
+            break
+    
+    if not lobby:
+        return
+    
+    sync_interval = lobby.get("timer_sync_interval", 5.0)
+    
+    try:
+        while lobby["timer_is_running"]:
+            elapsed = time.time() - lobby["timer_start_time"]
+            remaining = max(0, lobby["timer_duration"] - elapsed)
+            
+            await notify_clients(lobby_id, {
+                "action": "timer_sync",
+                "remaining": remaining,
+                "elapsed": elapsed,
+                "duration": lobby["timer_duration"],
+                "start_time": lobby["timer_start_time"],
+                "is_running": remaining > 0
+            })
+            
+            if remaining <= 0:
+                print(f"Timer finished for lobby {lobby_id}")
+                await finish_server_timer(lobby_id)
+                break
+            
+            await asyncio.sleep(sync_interval)
+            
+    except asyncio.CancelledError:
+        print(f"Timer sync task cancelled for lobby {lobby_id}")
+        raise
+    except Exception as e:
+        print(f"Error in timer sync task for lobby {lobby_id}: {e}")
+    finally:
+        lobby["timer_task"] = None
+        lobby["timer_is_running"] = False
+
+async def finish_server_timer(lobby_id: str):
+    lobby = None
+    for c, l in lobbies.items():
+        if l["lobby_id"] == lobby_id:
+            lobby = l
+            break
+    
+    if not lobby:
+        return
+    
+    lobby["timer_is_running"] = False
+    
+    await notify_clients(lobby_id, {
+        "action": "timer_finished",
+        "duration": lobby["timer_duration"]
+    })
+    
+    print(f"Timer finished for lobby {lobby_id}")
+
 async def handle_disconnect(websocket: WebSocket):
     client_ip = websocket.client.host
     for lobby_id, client_list in list(clients.items()):
@@ -813,6 +939,8 @@ async def handle_disconnect(websocket: WebSocket):
             for creator, lobby in list(lobbies.items()):
                 if lobby["lobby_id"] == lobby_id:
                     if not client_list:
+                        if lobby["timer_task"] is not None:
+                            lobby["timer_task"].cancel()
                         del lobbies[creator]
                         print(f"Lobby {lobby_id} deleted due to no clients")
                     else:
