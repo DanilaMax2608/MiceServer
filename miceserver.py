@@ -70,7 +70,10 @@ async def create_lobby(request: LobbyCreateRequest):
         "timer_start_time": 0,  
         "timer_is_running": False,  
         "timer_task": None,  
-        "timer_sync_interval": 1.0  
+        "timer_sync_interval": 1.0,
+        "heartbeats": {username: time.time()},  
+        "heartbeat_task": None, 
+        "heartbeat_timeout": 4.0 
     }
     clients[lobby_id] = []
     
@@ -104,7 +107,8 @@ async def join_lobby(request: LobbyJoinRequest):
     lobby["players"].append(username)
     lobby["scores"][username] = 0
     lobby["positions"][username] = {"x": 0.0, "y": 0.0, "z": 0.0}
-    lobby["rotations"][username] = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0} 
+    lobby["rotations"][username] = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
+    lobby["heartbeats"][username] = time.time()  
     
     await notify_clients(lobby["lobby_id"], {
         "lobby_id": lobby["lobby_id"],
@@ -148,6 +152,10 @@ async def start_game(request: StartGameRequest):
     
     lobby["status"] = "started"
     lobby["seed"] = seed
+    
+    if lobby["heartbeat_task"] is None:
+        lobby["heartbeat_task"] = asyncio.create_task(heartbeat_check_task(lobby_id))
+        print(f"Started heartbeat check task for lobby {lobby_id}")
     
     print(f"Game started in lobby {lobby_id} with seed {seed} (creator: {username})")
     
@@ -220,7 +228,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         "timer_start_time": 0,
                         "timer_is_running": False,
                         "timer_task": None,
-                        "timer_sync_interval": 1.0  
+                        "timer_sync_interval": 1.0,
+                        "heartbeats": {username: time.time()},
+                        "heartbeat_task": None,
+                        "heartbeat_timeout": 4.0
                     }
                     clients[lobby_id] = [websocket]
                     
@@ -261,7 +272,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     lobby["players"].append(username)
                     lobby["scores"][username] = 0
                     lobby["positions"][username] = {"x": 0.0, "y": 0.0, "z": 0.0}
-                    lobby["rotations"][username] = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}  
+                    lobby["rotations"][username] = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
+                    lobby["heartbeats"][username] = time.time()  
                     clients[lobby["lobby_id"]].append(websocket)
                     
                     await notify_clients(lobby["lobby_id"], {
@@ -302,6 +314,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     
                     lobby["status"] = "started"
                     lobby["seed"] = seed
+                    
+                    if lobby["heartbeat_task"] is None:
+                        lobby["heartbeat_task"] = asyncio.create_task(heartbeat_check_task(lobby_id))
+                        print(f"Started heartbeat check task for lobby {lobby_id}")
                     
                     print(f"Game started in lobby {lobby_id} with seed {seed} (creator: {username})")
                     
@@ -366,6 +382,10 @@ async def websocket_endpoint(websocket: WebSocket):
                             lobby["timer_task"].cancel()
                             lobby["timer_task"] = None
                         
+                        if lobby["heartbeat_task"] is not None:
+                            lobby["heartbeat_task"].cancel()
+                            lobby["heartbeat_task"] = None
+                        
                         if lobby_id in clients:
                             for client in clients[lobby_id]:
                                 if client != websocket:
@@ -386,6 +406,8 @@ async def websocket_endpoint(websocket: WebSocket):
                                 del lobby["rotations"][username] 
                             if username in lobby["ready_players"]:
                                 lobby["ready_players"].remove(username)
+                            if username in lobby["heartbeats"]:
+                                del lobby["heartbeats"][username]
                             if lobby_id in clients:
                                 if websocket in clients[lobby_id]:
                                     clients[lobby_id].remove(websocket)
@@ -459,6 +481,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     else:
                         print(f"Updated position for {username} in lobby {lobby_id}: ({x},{y},{z})")
                     
+                    if username in lobby["heartbeats"]:
+                        lobby["heartbeats"][username] = time.time()
+                    
                     update_message = {
                         "action": "update_position",
                         "lobby_id": lobby_id,
@@ -478,6 +503,28 @@ async def websocket_endpoint(websocket: WebSocket):
                     
                     await notify_clients(lobby_id, update_message)
                 
+                elif action == "heartbeat":
+                    lobby_id = message.get("lobby_id")
+                    username = message.get("username")
+                    
+                    lobby = None
+                    for c, l in lobbies.items():
+                        if l["lobby_id"] == lobby_id:
+                            lobby = l
+                            break
+                    
+                    if not lobby:
+                        await websocket.send_json({"error": "Lobby not found"})
+                        continue
+                    
+                    if username not in lobby["players"]:
+                        await websocket.send_json({"error": "Player not in lobby"})
+                        continue
+                    
+                    lobby["heartbeats"][username] = time.time()
+                    
+                    await websocket.send_json({"action": "heartbeat_ack"})
+                
                 elif action == "collect_item":
                     lobby_id = message.get("lobby_id")
                     username = message.get("username")
@@ -496,6 +543,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     if username not in lobby["players"]:
                         await websocket.send_json({"error": "Player not in lobby"})
                         continue
+                    
+                    if username in lobby["heartbeats"]:
+                        lobby["heartbeats"][username] = time.time()
                     
                     if item_id not in lobby["items"]:
                         await websocket.send_json({"error": "Item not found"})
@@ -536,6 +586,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     if username not in lobby["players"]:
                         await websocket.send_json({"error": "Player not in lobby"})
                         continue
+                    
+                    if username in lobby["heartbeats"]:
+                        lobby["heartbeats"][username] = time.time()
     
                     if item_id not in lobby["items"]:
                         await websocket.send_json({"error": "Item not found"})
@@ -657,6 +710,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         await websocket.send_json({"error": "Player not in lobby"})
                         continue
                     
+                    if username in lobby["heartbeats"]:
+                        lobby["heartbeats"][username] = time.time()
+                    
                     if trap_id not in lobby["mouse_traps"]:
                         await websocket.send_json({"error": "Mouse trap not found"})
                         continue
@@ -695,6 +751,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     if not lobby:
                         await websocket.send_json({"error": "Lobby not found"})
                         continue
+                    
+                    if username in lobby["heartbeats"]:
+                        lobby["heartbeats"][username] = time.time()
        
                     lobby["items"] = {}
                     lobby["items_rotations"] = {} 
@@ -734,6 +793,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     if not lobby:
                         await websocket.send_json({"error": "Lobby not found"})
                         continue
+                    
+                    if username in lobby["heartbeats"]:
+                        lobby["heartbeats"][username] = time.time()
        
                     lobby["mouse_traps"] = {}
                     lobby["mouse_traps_rotations"] = {} 
@@ -776,6 +838,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     if username not in lobby["players"]:
                         await websocket.send_json({"error": "Player not in lobby"})
                         continue
+                    
+                    if username in lobby["heartbeats"]:
+                        lobby["heartbeats"][username] = time.time()
                     
                     if not chat_message or len(chat_message.strip()) == 0:
                         await websocket.send_json({"error": "Message cannot be empty"})
@@ -931,6 +996,100 @@ async def finish_server_timer(lobby_id: str):
     
     print(f"Timer finished for lobby {lobby_id}")
 
+async def heartbeat_check_task(lobby_id: str):
+    lobby = None
+    for c, l in lobbies.items():
+        if l["lobby_id"] == lobby_id:
+            lobby = l
+            break
+    
+    if not lobby:
+        return
+    
+    timeout = lobby.get("heartbeat_timeout", 4.0)
+    check_interval = 2.0 
+    
+    try:
+        while True:
+            await asyncio.sleep(check_interval)
+            
+            if lobby_id not in lobbies.values():
+                break
+                
+            current_time = time.time()
+            players_to_remove = []
+            
+            for username, last_heartbeat in lobby["heartbeats"].items():
+                if current_time - last_heartbeat > timeout:
+                    players_to_remove.append(username)
+            
+            for username in players_to_remove:
+                if username == lobby["creator"]:
+                    print(f"Creator {username} disconnected due to heartbeat timeout in lobby {lobby_id}")
+                    
+                    if lobby["timer_task"] is not None:
+                        lobby["timer_task"].cancel()
+                        lobby["timer_task"] = None
+                    
+                    lobby["heartbeat_task"] = None
+                    
+                    for client in clients.get(lobby_id, []):
+                        try:
+                            await client.send_json({"error": "Lobby closed by creator"})
+                        except:
+                            pass
+                    
+                    for creator_name, l in list(lobbies.items()):
+                        if l["lobby_id"] == lobby_id:
+                            if lobby_id in clients:
+                                del clients[lobby_id]
+                            del lobbies[creator_name]
+                            print(f"Lobby {lobby_id} deleted due to creator disconnect")
+                            break
+                    return
+                
+                elif username in lobby["players"]:
+                    print(f"Player {username} disconnected due to heartbeat timeout in lobby {lobby_id}")
+                    
+                    lobby["players"].remove(username)
+                    if username in lobby["scores"]:
+                        del lobby["scores"][username]
+                    if username in lobby["positions"]:
+                        del lobby["positions"][username]
+                    if username in lobby["rotations"]:
+                        del lobby["rotations"][username]
+                    if username in lobby["ready_players"]:
+                        lobby["ready_players"].remove(username)
+                    if username in lobby["heartbeats"]:
+                        del lobby["heartbeats"][username]
+                    
+                    await notify_clients(lobby_id, {
+                        "action": "player_disconnected",
+                        "username": username,
+                        "players": lobby["players"],
+                        "scores": lobby["scores"]
+                    })
+                    
+                    print(f"Player {username} removed from lobby {lobby_id}. Remaining players: {lobby['players']}")
+            
+            if len(lobby["players"]) == 0:
+                print(f"No players left in lobby {lobby_id}, deleting")
+                if lobby["timer_task"] is not None:
+                    lobby["timer_task"].cancel()
+                for creator_name, l in list(lobbies.items()):
+                    if l["lobby_id"] == lobby_id:
+                        if lobby_id in clients:
+                            del clients[lobby_id]
+                        del lobbies[creator_name]
+                        break
+                return
+                
+    except asyncio.CancelledError:
+        print(f"Heartbeat check task cancelled for lobby {lobby_id}")
+        raise
+    except Exception as e:
+        print(f"Error in heartbeat check task for lobby {lobby_id}: {e}")
+
 async def handle_disconnect(websocket: WebSocket):
     client_ip = websocket.client.host
     for lobby_id, client_list in list(clients.items()):
@@ -941,24 +1100,10 @@ async def handle_disconnect(websocket: WebSocket):
                     if not client_list:
                         if lobby["timer_task"] is not None:
                             lobby["timer_task"].cancel()
+                        if lobby["heartbeat_task"] is not None:
+                            lobby["heartbeat_task"].cancel()
                         del lobbies[creator]
                         print(f"Lobby {lobby_id} deleted due to no clients")
-                    else:
-                        for username in list(lobby["players"]):
-                            if username != lobby["creator"]:
-                                lobby["players"].remove(username)
-                                del lobby["scores"][username]
-                                del lobby["positions"][username]
-                                if username in lobby["rotations"]:
-                                    del lobby["rotations"][username]
-                                if username in lobby["ready_players"]:
-                                    lobby["ready_players"].remove(username)
-                                await notify_clients(lobby_id, {
-                                    "lobby_id": lobby_id,
-                                    "players": lobby["players"],
-                                    "status": lobby["status"]
-                                })
-                                print(f"Removed {username} from lobby {lobby_id} due to disconnect")
             print(f"WebSocket client disconnected: {client_ip}")
             break
 
