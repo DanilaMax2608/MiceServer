@@ -24,7 +24,7 @@ class StartGameRequest(BaseModel):
     lobby_id: str
     username: str
     seed: int = 0
-    bonus_durations: Optional[Dict[str, float]] = None
+    bonus_durations: Optional[Dict[str, float]] = None 
 
 def is_valid_username(username: str) -> bool:
     return username.startswith("@") and len(username) > 1
@@ -48,31 +48,29 @@ async def create_lobby(request: LobbyCreateRequest):
         "scores": {username: 0},
         "seed": 0,
         "positions": {username: {"x": 0.0, "y": 0.0, "z": 0.0}},
-        "rotations": {username: {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}},
+        "rotations": {username: {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}},  
         "items": {},
-        "items_rotations": {},
+        "items_rotations": {},  
         "mouse_traps": {},
-        "mouse_traps_rotations": {},
+        "mouse_traps_rotations": {}, 
         "ready_players": [],
         "messages": [],
-        "bonus_durations": {
+        "bonus_durations": { 
             "disable_control_others": 5.0,
             "slow_others": 5.0,
             "speed_up_others": 5.0,
             "invert_control_others": 5.0
         },
-        "bonus_multipliers": {
+        "bonus_multipliers": {  
             "slow_multiplier": 0.5,
             "speed_up_multiplier": 2.0
         },
         "created_at": time.time(),
-        "timer_duration": 0,
-        "timer_start_time": 0,
-        "timer_is_running": False,
-        "timer_task": None,
-        "timer_sync_interval": 1.0,
-        "last_ping": {username: time.time()},
-        "ping_check_task": None
+        "timer_duration": 0,  
+        "timer_start_time": 0,  
+        "timer_is_running": False,  
+        "timer_task": None,  
+        "timer_sync_interval": 1.0  
     }
     clients[lobby_id] = []
     
@@ -106,8 +104,7 @@ async def join_lobby(request: LobbyJoinRequest):
     lobby["players"].append(username)
     lobby["scores"][username] = 0
     lobby["positions"][username] = {"x": 0.0, "y": 0.0, "z": 0.0}
-    lobby["rotations"][username] = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
-    lobby["last_ping"][username] = time.time()
+    lobby["rotations"][username] = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0} 
     
     await notify_clients(lobby["lobby_id"], {
         "lobby_id": lobby["lobby_id"],
@@ -152,9 +149,6 @@ async def start_game(request: StartGameRequest):
     lobby["status"] = "started"
     lobby["seed"] = seed
     
-    if lobby["ping_check_task"] is None:
-        lobby["ping_check_task"] = asyncio.create_task(ping_check_loop(lobby_id))
-    
     print(f"Game started in lobby {lobby_id} with seed {seed} (creator: {username})")
     
     await notify_clients(lobby_id, {
@@ -163,9 +157,9 @@ async def start_game(request: StartGameRequest):
         "status": "started",
         "seed": seed,
         "items": lobby["items"],
-        "items_rotations": lobby["items_rotations"],
+        "items_rotations": lobby["items_rotations"], 
         "mouse_traps": lobby["mouse_traps"],
-        "mouse_traps_rotations": lobby["mouse_traps_rotations"]
+        "mouse_traps_rotations": lobby["mouse_traps_rotations"] 
     })
     
     return {"message": "Game has started", "seed": seed}
@@ -204,18 +198,18 @@ async def websocket_endpoint(websocket: WebSocket):
                         "scores": {username: 0},
                         "seed": 0,
                         "positions": {username: {"x": 0.0, "y": 0.0, "z": 0.0}},
-                        "rotations": {username: {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}},
+                        "rotations": {username: {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}},  
                         "items": {},
-                        "items_rotations": {},
+                        "items_rotations": {},  
                         "mouse_traps": {},
-                        "mouse_traps_rotations": {},
+                        "mouse_traps_rotations": {},  
                         "ready_players": [],
                         "messages": [],
                         "bonus_durations": {
                             "disable_control_others": 5.0,
                             "slow_others": 5.0,
                             "speed_up_others": 5.0,
-                            "invert_control_others": 5.0
+                            "invert_control_others": 5.0  
                         },
                         "bonus_multipliers": {
                             "slow_multiplier": 0.5,
@@ -226,9 +220,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "timer_start_time": 0,
                         "timer_is_running": False,
                         "timer_task": None,
-                        "timer_sync_interval": 1.0,
-                        "last_ping": {username: time.time()},
-                        "ping_check_task": None
+                        "timer_sync_interval": 1.0  
                     }
                     clients[lobby_id] = [websocket]
                     
@@ -269,8 +261,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     lobby["players"].append(username)
                     lobby["scores"][username] = 0
                     lobby["positions"][username] = {"x": 0.0, "y": 0.0, "z": 0.0}
-                    lobby["rotations"][username] = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
-                    lobby["last_ping"][username] = time.time()
+                    lobby["rotations"][username] = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}  
                     clients[lobby["lobby_id"]].append(websocket)
                     
                     await notify_clients(lobby["lobby_id"], {
@@ -312,9 +303,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     lobby["status"] = "started"
                     lobby["seed"] = seed
                     
-                    if lobby["ping_check_task"] is None:
-                        lobby["ping_check_task"] = asyncio.create_task(ping_check_loop(lobby_id))
-                    
                     print(f"Game started in lobby {lobby_id} with seed {seed} (creator: {username})")
                     
                     await notify_clients(lobby_id, {
@@ -323,12 +311,12 @@ async def websocket_endpoint(websocket: WebSocket):
                         "status": "started",
                         "seed": seed,
                         "items": lobby["items"],
-                        "items_rotations": lobby["items_rotations"],
+                        "items_rotations": lobby["items_rotations"], 
                         "mouse_traps": lobby["mouse_traps"],
-                        "mouse_traps_rotations": lobby["mouse_traps_rotations"]
+                        "mouse_traps_rotations": lobby["mouse_traps_rotations"] 
                     })
                 
-                elif action == "set_bonus_data":
+                elif action == "set_bonus_data": 
                     username = message.get("username")
                     lobby_id = message.get("lobby_id")
                     bonus_durations = message.get("bonus_durations")
@@ -378,10 +366,6 @@ async def websocket_endpoint(websocket: WebSocket):
                             lobby["timer_task"].cancel()
                             lobby["timer_task"] = None
                         
-                        if lobby["ping_check_task"] is not None:
-                            lobby["ping_check_task"].cancel()
-                            lobby["ping_check_task"] = None
-                        
                         if lobby_id in clients:
                             for client in clients[lobby_id]:
                                 if client != websocket:
@@ -394,7 +378,24 @@ async def websocket_endpoint(websocket: WebSocket):
                         print(f"Lobby {lobby_id} deleted by creator {username}")
                         await websocket.send_json({"message": "Lobby closed"})
                     else:
-                        await handle_player_disconnect(lobby_id, username, websocket)
+                        if username in lobby["players"]:
+                            lobby["players"].remove(username)
+                            del lobby["scores"][username]
+                            del lobby["positions"][username]
+                            if username in lobby["rotations"]:
+                                del lobby["rotations"][username] 
+                            if username in lobby["ready_players"]:
+                                lobby["ready_players"].remove(username)
+                            if lobby_id in clients:
+                                if websocket in clients[lobby_id]:
+                                    clients[lobby_id].remove(websocket)
+                            await notify_clients(lobby_id, {
+                                "lobby_id": lobby_id,
+                                "players": lobby["players"],
+                                "status": lobby["status"]
+                            })
+                            print(f"{username} left lobby {lobby_id}")
+                            await websocket.send_json({"message": "Left lobby"})
                 
                 elif action == "ready":
                     username = message.get("username")
@@ -431,7 +432,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     x = message.get("x", 0.0)
                     y = message.get("y", 0.0)
                     z = message.get("z", 0.0)
-                    rot_x = message.get("rot_x")
+                    rot_x = message.get("rot_x")  
                     rot_y = message.get("rot_y")
                     rot_z = message.get("rot_z")
                     rot_w = message.get("rot_w")
@@ -451,7 +452,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         continue
                     
                     lobby["positions"][username] = {"x": x, "y": y, "z": z}
-                    lobby["last_ping"][username] = time.time()
                     
                     if rot_x is not None and rot_y is not None and rot_z is not None and rot_w is not None:
                         lobby["rotations"][username] = {"x": rot_x, "y": rot_y, "z": rot_z, "w": rot_w}
@@ -550,7 +550,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         continue
     
                     lobby["items"][item_id]["collected"] = True
-                    lobby["scores"][username] = lobby["scores"].get(username, 0) + 1
+                    lobby["scores"][username] = lobby["scores"].get(username, 0) + 1 
                     print(f"Bonus item {item_id} collected by {username} in lobby {lobby_id}, bonus_type: {bonus_type}, new score: {lobby['scores'][username]}")
     
                     await notify_clients(lobby_id, {
@@ -559,7 +559,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "item_id": item_id,
                         "username": username,
                         "bonus_type": bonus_type,
-                        "scores": lobby["scores"]
+                        "scores": lobby["scores"]  
                     })
     
                     bonus_durations = lobby.get("bonus_durations", {})
@@ -567,7 +567,7 @@ async def websocket_endpoint(websocket: WebSocket):
     
                     if bonus_type == "disable_control_others":
                         duration = bonus_durations.get("disable_control_others")
-                        if duration is None:
+                        if duration is None:  
                             duration = 5.0
                             print(f"Warning: disable_control_others duration not found, using default: {duration}")
                         
@@ -685,19 +685,19 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif action == "register_items":
                     lobby_id = message.get("lobby_id")
                     items = message.get("items", [])
-      
+       
                     lobby = None
                     for c, l in lobbies.items():
                         if l["lobby_id"] == lobby_id:
                             lobby = l
                             break
-      
+       
                     if not lobby:
                         await websocket.send_json({"error": "Lobby not found"})
                         continue
-      
+       
                     lobby["items"] = {}
-                    lobby["items_rotations"] = {}
+                    lobby["items_rotations"] = {} 
                     for item in items:
                         item_id = item.get("item_id")
                         if item_id:
@@ -711,32 +711,32 @@ async def websocket_endpoint(websocket: WebSocket):
                             if rotation:
                                 lobby["items_rotations"][item_id] = rotation
                             else:
-                                lobby["items_rotations"][item_id] = {"x": 0, "y": 0, "z": 0, "w": 1}
-      
+                                lobby["items_rotations"][item_id] = {"x": 0, "y": 0, "z": 0, "w": 1}  
+       
                     await notify_clients(lobby_id, {
                         "action": "items_registered",
                         "lobby_id": lobby_id,
                         "items_count": len(lobby["items"])
                     })
-      
+       
                     print(f"Registered {len(lobby['items'])} items with rotations in lobby {lobby_id}")
                 
                 elif action == "register_mouse_traps":
                     lobby_id = message.get("lobby_id")
                     mouse_traps = message.get("mouse_traps", [])
-      
+       
                     lobby = None
                     for c, l in lobbies.items():
                         if l["lobby_id"] == lobby_id:
                             lobby = l
                             break
-      
+       
                     if not lobby:
                         await websocket.send_json({"error": "Lobby not found"})
                         continue
-      
+       
                     lobby["mouse_traps"] = {}
-                    lobby["mouse_traps_rotations"] = {}
+                    lobby["mouse_traps_rotations"] = {} 
                     for trap in mouse_traps:
                         trap_id = trap.get("trap_id")
                         if trap_id:
@@ -748,14 +748,14 @@ async def websocket_endpoint(websocket: WebSocket):
                             if rotation:
                                 lobby["mouse_traps_rotations"][trap_id] = rotation
                             else:
-                                lobby["mouse_traps_rotations"][trap_id] = {"x": 0, "y": 0, "z": 0, "w": 1}
-      
+                                lobby["mouse_traps_rotations"][trap_id] = {"x": 0, "y": 0, "z": 0, "w": 1} 
+       
                     await notify_clients(lobby_id, {
                         "action": "mouse_traps_registered",
                         "lobby_id": lobby_id,
                         "mouse_traps_count": len(lobby["mouse_traps"])
                     })
-      
+       
                     print(f"Registered {len(lobby['mouse_traps'])} mouse traps with rotations in lobby {lobby_id}")
                 
                 elif action == "send_message":
@@ -832,19 +832,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 elif action == "ping":
                     username = message.get("username", f"Unknown_{client_ip}")
-                    lobby_id = message.get("lobby_id")
-                    
-                    if lobby_id:
-                        lobby = None
-                        for c, l in lobbies.items():
-                            if l["lobby_id"] == lobby_id:
-                                lobby = l
-                                break
-                        
-                        if lobby and username in lobby["players"]:
-                            lobby["last_ping"][username] = time.time()
-                            print(f"Ping received from {username} in lobby {lobby_id}, updated last_ping")
-                    
                     await websocket.send_json({"action": "pong"})
                     print(f"Ping received from {username}, sent pong")
             
@@ -854,111 +841,6 @@ async def websocket_endpoint(websocket: WebSocket):
     
     except WebSocketDisconnect:
         await handle_disconnect(websocket)
-
-async def ping_check_loop(lobby_id: str):
-    ping_timeout = 5.0
-    check_interval = 2.0
-    
-    while True:
-        try:
-            lobby = None
-            for c, l in lobbies.items():
-                if l["lobby_id"] == lobby_id:
-                    lobby = l
-                    break
-            
-            if not lobby:
-                print(f"Lobby {lobby_id} not found, stopping ping check loop")
-                break
-            
-            if lobby["status"] != "started":
-                print(f"Lobby {lobby_id} status is {lobby['status']}, stopping ping check loop")
-                break
-            
-            current_time = time.time()
-            disconnected_players = []
-            
-            for player in lobby["players"]:
-                last_ping = lobby["last_ping"].get(player, 0)
-                if current_time - last_ping > ping_timeout:
-                    disconnected_players.append(player)
-            
-            for player in disconnected_players:
-                print(f"Player {player} in lobby {lobby_id} timed out (last ping: {lobby['last_ping'].get(player, 0)})")
-                
-                if player == lobby["creator"]:
-                    print(f"Creator {player} disconnected, closing lobby {lobby_id}")
-                    
-                    if lobby["timer_task"] is not None:
-                        lobby["timer_task"].cancel()
-                    
-                    if lobby_id in clients:
-                        for client in clients[lobby_id]:
-                            try:
-                                await client.send_json({"error": "Lobby closed by creator"})
-                            except Exception as e:
-                                print(f"Error notifying client in lobby {lobby_id}: {e}")
-                        del clients[lobby_id]
-                    
-                    creator_key = None
-                    for c, l in lobbies.items():
-                        if l["lobby_id"] == lobby_id:
-                            creator_key = c
-                            break
-                    
-                    if creator_key:
-                        del lobbies[creator_key]
-                    
-                    return
-                else:
-                    await handle_player_disconnect(lobby_id, player, None)
-            
-            await asyncio.sleep(check_interval)
-            
-        except asyncio.CancelledError:
-            print(f"Ping check loop cancelled for lobby {lobby_id}")
-            break
-        except Exception as e:
-            print(f"Error in ping check loop for lobby {lobby_id}: {e}")
-            await asyncio.sleep(check_interval)
-
-async def handle_player_disconnect(lobby_id: str, username: str, websocket: Optional[WebSocket]):
-    lobby = None
-    creator = None
-    for c, l in lobbies.items():
-        if l["lobby_id"] == lobby_id:
-            lobby = l
-            creator = c
-            break
-    
-    if not lobby:
-        return
-    
-    if username in lobby["players"]:
-        lobby["players"].remove(username)
-        if username in lobby["scores"]:
-            del lobby["scores"][username]
-        if username in lobby["positions"]:
-            del lobby["positions"][username]
-        if username in lobby["rotations"]:
-            del lobby["rotations"][username]
-        if username in lobby["ready_players"]:
-            lobby["ready_players"].remove(username)
-        if username in lobby["last_ping"]:
-            del lobby["last_ping"][username]
-        
-        if lobby_id in clients and websocket and websocket in clients[lobby_id]:
-            clients[lobby_id].remove(websocket)
-        
-        await notify_clients(lobby_id, {
-            "action": "player_disconnected",
-            "lobby_id": lobby_id,
-            "username": username,
-            "players": lobby["players"],
-            "scores": lobby["scores"]
-        })
-        
-        print(f"{username} disconnected from lobby {lobby_id}")
 
 async def start_server_timer(lobby_id: str, duration: float):
     lobby = None
@@ -998,7 +880,7 @@ async def timer_sync_task(lobby_id: str):
     if not lobby:
         return
     
-    sync_interval = lobby.get("timer_sync_interval", 1.0)
+    sync_interval = lobby.get("timer_sync_interval", 1.0)  
     
     try:
         while lobby["timer_is_running"]:
@@ -1059,16 +941,24 @@ async def handle_disconnect(websocket: WebSocket):
                     if not client_list:
                         if lobby["timer_task"] is not None:
                             lobby["timer_task"].cancel()
-                        
-                        if lobby["ping_check_task"] is not None:
-                            lobby["ping_check_task"].cancel()
-                        
                         del lobbies[creator]
                         print(f"Lobby {lobby_id} deleted due to no clients")
                     else:
                         for username in list(lobby["players"]):
                             if username != lobby["creator"]:
-                                await handle_player_disconnect(lobby_id, username, websocket)
+                                lobby["players"].remove(username)
+                                del lobby["scores"][username]
+                                del lobby["positions"][username]
+                                if username in lobby["rotations"]:
+                                    del lobby["rotations"][username]
+                                if username in lobby["ready_players"]:
+                                    lobby["ready_players"].remove(username)
+                                await notify_clients(lobby_id, {
+                                    "lobby_id": lobby_id,
+                                    "players": lobby["players"],
+                                    "status": lobby["status"]
+                                })
+                                print(f"Removed {username} from lobby {lobby_id} due to disconnect")
             print(f"WebSocket client disconnected: {client_ip}")
             break
 
